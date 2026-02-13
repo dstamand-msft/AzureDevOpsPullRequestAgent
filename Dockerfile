@@ -17,9 +17,14 @@ RUN dotnet publish src/ADOPullRequestAgent/ADOPullRequestAgent.csproj \
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
 WORKDIR /app
 
+COPY --from=build /app/publish .
+
+# Create writable work directory for the non-root user
+RUN mkdir -p /output && \
+    chown "$APP_UID":"$APP_UID" /output && \
+    chmod 755 /output
+
 # Run as non-root user for security
 USER $APP_UID
-
-COPY --from=build /app/publish .
 
 ENTRYPOINT ["dotnet", "ADOPullRequestAgent.dll"]

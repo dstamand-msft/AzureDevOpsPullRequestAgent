@@ -4,49 +4,60 @@ trigger: none
 # Go to: Repos > Branches > Branch Policies > Build Validation to add this pipeline.
 
 pool:
-  name: 'mdp-linux-mcaps'
+  name: '<value>'
 
 variables:
 - group: 'GitHub-Copilot'
 
-resources:
-  containers:
-    # GitHub Copilot CLI service container
-    - container: copilot_cli
-      image: '$(ACR_NAME).azurecr.io/github-copilot/cli:latest'
-      ports:
-        - 4321:4321
-      options: '--headless --port 4321'
-
-services:
-  copilot_cli: copilot_cli
-
 steps:
+# Start the GitHub Copilot CLI as a background service container
+- task: Docker@2
+  displayName: 'Start Copilot CLI Service'
+  inputs:
+    containerRegistry: $(DOCKER_SERVICECONNECTION_NAME)
+    command: 'run'
+    arguments: >-
+      --name copilot-cli
+      -e COPILOT_GITHUB_TOKEN=$(COPILOT_GITHUB_TOKEN)
+      -d
+      -p 4321:4321
+      -v $(Build.ArtifactStagingDirectory)/copilot:/work/copilot
+      -v $(Build.SourcesDirectory):/sources
+      $(ACR_NAME).azurecr.io/github-copilot/cli:latest
+      --headless --port 4321 --log-level info --log-dir /work/copilot
+
 - task: Docker@2
   displayName: 'Run Pull Request Container'
   inputs:
-    containerRegistry: $(ACR_SERVICECONNECTION_NAME)
+    containerRegistry: $(DOCKER_SERVICECONNECTION_NAME)
     repository: 'ado'
     command: 'run'
     arguments: >-
       --name pr-agent-container
-      -e COPILOT_GITHUB_TOKEN=$(COPILOT_GITHUB_TOKEN)
-      $(ACR_NAME).azurecr.io/ado/PullRequestAgent:latest
+      --network container:copilot-cli
+      $(ACR_NAME).azurecr.io/ado/pullrequestagent:latest
       --ado-token $(System.AccessToken)
       --pull-request-id $(System.PullRequest.PullRequestId)
       --organization-name $(ADO_ORGANIZATION_NAME)
       --project-name $(System.TeamProject)
       --repository-name $(Build.Repository.Name)
-      --save-output
+      --model $(MODEL_NAME)
+      --output-directory /output
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
 - script: |
-    docker cp pr-agent-container:/app/pull_request_$(System.PullRequest.PullRequestId)_review.md $(Build.ArtifactStagingDirectory)/
-  displayName: 'Extract review file from container'
+    docker cp pr-agent-container:/output/. $(Build.ArtifactStagingDirectory)/output/
+  displayName: 'Copy assistant output from container'
+
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish review artifact'
+  inputs:
+    targetPath: '$(Build.ArtifactStagingDirectory)'
+    artifact: 'PullRequestReview'
 
 - powershell: |
-    $reviewFile = "$(Build.ArtifactStagingDirectory)/pull_request_$(System.PullRequest.PullRequestId)_review.md"
+    $reviewFile = "$(Build.ArtifactStagingDirectory)/copilot/copilot-review.md"
     $content = Get-Content -Path $reviewFile -Raw
     $body = @{
       comments = @(@{ parentCommentId = 0; content = $content; commentType = 1 })
@@ -61,9 +72,9 @@ steps:
   displayName: 'Post review as PR comment'
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-    
-- task: PublishPipelineArtifact@1
-  displayName: 'Publish review artifact'
-  inputs:
-    targetPath: '$(Build.ArtifactStagingDirectory)'
-    artifact: 'PullRequestReview'
+
+- script: |
+    docker stop copilot-cli || true
+    docker rm copilot-cli || true
+  displayName: 'Cleanup Copilot CLI container'
+  condition: always()

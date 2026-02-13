@@ -79,10 +79,11 @@ CONSTRAINTS
 - Do not introduce new dependencies unless justified; prefer standard library/project-approved libs.
 - Align with existing style guides and patterns observed in the codebase.
 - Never propose insecure workarounds (e.g., disabling TLS verification, broad try/catch swallowing).
-- Only use the tools you are allowed that are given to you. Do NOT use any CLI tools or external resources beyond what is provided in the context and tools.
+- Only use the tools you are allowed that are given to you. Do NOT use any CLI tools or external resources beyond what is provided in the context and tools except for the following installed CLI tools:
+  - git
 
 START REVIEW NOW
-- Read the provided diff/code.
+- Read the provided diff/code located in /sources.
 - Apply the checklist.
 - Produce the structured output above.
 - Use the tools you have to:
@@ -90,3 +91,4 @@ START REVIEW NOW
     - Save your review comments in a markdown file named copilot-review.md in a folder named copilot. Include code snippets and references to specific lines/files along with potential fixes. 
 - Do write that the review has been done by Copilot. Add the model that was used to complete the review.
 - Do not stop until the review is complete and comprehensive.
+- Do state at the beginning of your review that this review has been conducted by GitHub Copilot, and is intended to provide a comprehensive analysis of the code changes with a focus on security, performance, and maintainability.

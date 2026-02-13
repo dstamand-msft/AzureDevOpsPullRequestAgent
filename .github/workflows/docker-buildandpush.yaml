@@ -27,12 +27,19 @@ jobs:
       - name: Fetch latest GitHub Copilot CLI release tag
         id: copilot-version
         run: |
-          LATEST_TAG=$(curl -sf \
-            https://api.github.com/repos/github/copilot-cli/releases/latest \
-            | jq -r '.tag_name')
+          RESPONSE=$(curl -sf https://api.github.com/repos/github/copilot-cli/releases/latest)
+
+          if [ $? -ne 0 ]; then
+            echo "::error::Failed to fetch release from GitHub API"
+            exit 1
+          fi
+          
+          #echo "API Response: $RESPONSE"
+          
+          LATEST_TAG=$(echo "$RESPONSE" | jq -r '.tag_name')
 
           if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-            echo "::error::Failed to fetch the latest Copilot CLI release tag"
+            echo "::error::Failed to parse tag_name from API response"
             exit 1
           fi
 
@@ -51,7 +58,17 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Log in to Azure Container Registry
-        run: az acr login --name "$ACR_NAME"
+        run: |
+          ACR_TOKEN=$(az acr login --name "$ACR_NAME" --expose-token --output tsv --query accessToken)
+          echo "::add-mask::$ACR_TOKEN"
+          echo "ACR_TOKEN=$ACR_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Log in to Azure Container Registry (Docker)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_LOGIN_SERVER }}
+          username: 00000000-0000-0000-0000-000000000000
+          password: ${{ env.ACR_TOKEN }}
 
       - name: Check if version already exists in ACR
         id: version-check
@@ -100,32 +117,3 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
-
-      - name: Cleanup oldest 3 tags in ACR
-        if: steps.version-check.outputs.exists != 'true'
-        run: |
-          echo "Fetching tags ordered by timestamp (oldest first)..."
-          OLDEST_TAGS=$(az acr manifest list-metadata \
-            --registry "$ACR_NAME" \
-            --name "$IMAGE_NAME" \
-            --orderby time_asc \
-            --query "[].tags[]" \
-            --output tsv \
-            | head -n 3)
-
-          if [ -z "$OLDEST_TAGS" ]; then
-            echo "No tags found to clean up."
-            exit 0
-          fi
-
-          echo "Oldest 3 tags to delete:"
-          echo "$OLDEST_TAGS"
-
-          for TAG in $OLDEST_TAGS; do
-            echo "Deleting tag: ${TAG}"
-            az acr repository untag \
-              --name "$ACR_NAME" \
-              --image "${IMAGE_NAME}:${TAG}"
-          done
-
-          echo "Tag cleanup complete."

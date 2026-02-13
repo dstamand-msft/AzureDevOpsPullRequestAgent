@@ -1,30 +1,49 @@
-# Stage 1: Base with a potentially cached installation
-FROM node:22-slim AS base
-RUN npm install -g @github/copilot
-
-# Stage 2: Updater to fetch the latest version
-FROM base AS updater
+# Stage 1: Install GitHub Copilot CLI using the official install script
+FROM debian:bookworm-slim AS installer
+# Invalidate cache to force a fresh install
 ARG CACHE_BUSTER
-RUN npm update -g @github/copilot
 
-# Final Stage: Create a clean, final image
-FROM node:22-slim
-
-# Install sudo for dropping privileges, then clean up
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends sudo && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        tar \
+        coreutils \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the application files from the updater stage
-COPY --from=updater --link /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=updater --link /usr/local/bin /usr/local/bin
+# Install copilot CLI to /usr/local/bin via the official install script
+RUN curl -fsSL https://raw.githubusercontent.com/github/copilot-cli/refs/heads/main/install.sh | bash
+
+# Final Stage: Create a clean, minimal image
+FROM debian:bookworm-slim
+
+# Install Node.js (for npx), sudo for dropping privileges, dos2unix for line endings, ca-certificates for TLS
+RUN apt-get update && \
+apt-get install -y --no-install-recommends \
+    sudo \
+    dos2unix \
+    ca-certificates \
+    curl \
+    gnupg \
+    git \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the copilot binary from the installer stage
+COPY --from=installer /usr/local/bin/copilot /usr/local/bin/copilot
 
 # Copy and set up the entrypoint script
-COPY --chmod=755 --link entrypoint.sh /usr/local/bin/entrypoint.sh
+# TODO: improve security with entrypoint script that drops privileges to a non-root user, has the right env vars and handles signals properly.
+# COPY --link entrypoint.sh /usr/local/bin/entrypoint.sh
+# RUN dos2unix /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
 # Set the working directory
 WORKDIR /work
 
 # Set the entrypoint to our custom script.
 # The CMD will be passed as arguments to this script.
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["copilot"]

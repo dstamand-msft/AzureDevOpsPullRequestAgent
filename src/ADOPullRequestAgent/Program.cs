@@ -1,5 +1,4 @@
-﻿using GHCPAgent;
-using System.CommandLine;
+﻿using System.CommandLine;
 using System.Diagnostics;
 using System.IO.Abstractions;
 
@@ -11,39 +10,57 @@ namespace ADOPullRequestAgent
         /// Entry point for the Azure DevOps pull request agent application. Parses command-line arguments, initiates a
         /// code review for the specified pull request, and optionally saves the review output to a file.
         /// </summary>
-        /// <remarks>This method validates command-line input and requires valid values for authentication
-        /// and pull request identification. If parsing fails, error messages are written to the standard error stream
-        /// and the application exits. The review output can be saved to a file if the corresponding option is
-        /// specified.</remarks>
-        /// <param name="args">An array of command-line arguments that configure authentication, pull request details, organization,
-        /// project, repository, and output options.</param>
+        /// <remarks>
+        /// This method validates command-line input and requires valid values for authentication and pull request
+        /// identification. If parsing fails, error messages are written to the standard error stream and the
+        /// application exits. The review output can be saved to a file if the corresponding option is specified.
+        /// </remarks>
+        /// <param name="args">
+        /// An array of command-line arguments that configure authentication, pull request details, organization,
+        /// project, repository, and output options.
+        /// </param>
         /// <returns>A task that represents the asynchronous execution of the application.</returns>
         static async Task Main(string[] args)
         {
             Option<string> adoTokenOption = new("--ado-token", "-at")
             {
-                Description = "The token to use for authentication. To use this agent locally using your identity, use the Az CLI: az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798"
+                Description = "The token to use for authentication. To use this agent locally using your identity, use the Az CLI: az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798",
+                Required = true
             };
 
             Option<int> pullRequestIdOption = new("--pull-request-id", "-id")
             {
-                Description = "The ID of the pull request to review."
+                Description = "The ID of the pull request to review.",
+                Required = true
             };
             Option<string> organizationNameOption = new("--organization-name", "-o")
             {
-                Description = "The name of the Azure DevOps organization."
+                Description = "The name of the Azure DevOps organization.",
+                Required = true
             };
             Option<string> projectNameOption = new("--project-name", "-p")
             {
-                Description = "The name of the Azure DevOps project."
+                Description = "The name of the Azure DevOps project.",
+                Required = true
             };
             Option<string> repositoryNameOption = new("--repository-name", "-r")
             {
-                Description = "The name of the Azure DevOps repository."
+                Description = "The name of the Azure DevOps repository.",
+                Required = true
             };
-            Option<bool> saveOutputOption = new Option<bool>("--save-output")
+            Option<int> cliPortOption = new("--cli-port", "-cp")
             {
-                Description = "Whether to save the agent work steps output to a file."
+                Description = "The port number for the CLI. Defaults to 4321",
+                DefaultValueFactory = _ => 4321
+            };
+            Option<string> modelOption = new("--model", "-m")
+            {
+                Description = "The model to use for the agent",
+                Required = true
+            };
+            Option<string> outputDirectoryOption = new Option<string>("--output-directory")
+            {
+                Description = "The directory to save the agent work steps output to a file (optional)."
             };
 
             var rootCommand = new RootCommand("A pull request agent for Azure DevOps. It is responsible to provide code reviewing for the pull request and focuses on security, performance, and maintainability.");
@@ -52,7 +69,9 @@ namespace ADOPullRequestAgent
             rootCommand.Options.Add(organizationNameOption);
             rootCommand.Options.Add(projectNameOption);
             rootCommand.Options.Add(repositoryNameOption);
-            rootCommand.Options.Add(saveOutputOption);
+            rootCommand.Options.Add(outputDirectoryOption);
+            rootCommand.Options.Add(cliPortOption);
+            rootCommand.Options.Add(modelOption);
 
             var parseResult = rootCommand.Parse(args);
             if (parseResult.Errors.Count != 0)
@@ -75,19 +94,27 @@ namespace ADOPullRequestAgent
             var organizationName = parseResult.GetRequiredValue<string>(organizationNameOption);
             var projectName = parseResult.GetRequiredValue<string>(projectNameOption);
             var repositoryName = parseResult.GetRequiredValue<string>(repositoryNameOption);
-            var saveOutput = parseResult.GetValue<bool>(saveOutputOption);
+            var outputDirectory = parseResult.GetValue<string>(outputDirectoryOption);
+            var cliPort = parseResult.GetValue<int>(cliPortOption);
+            var model = parseResult.GetValue<string>(modelOption);
+
+            var agentOptions = new AgentOptions
+            {
+                Model = model!,
+                CliPort = cliPort
+            };
 
             var fileSystem = new FileSystem();
-            var agent = new PullRequestAgent(fileSystem, token);
+            var agent = new PullRequestAgent(fileSystem, token, agentOptions);
             var response = await agent.RunAsync(pullRequestId, organizationName, projectName, repositoryName);
 
             Console.WriteLine(response);
 
-            if (saveOutput)
+            if (!string.IsNullOrWhiteSpace(outputDirectory))
             {
-                using (var stream = fileSystem.File.CreateText($"pull_request_{pullRequestId}_review.md"))
+                using (var writer = new StreamWriter(fileSystem.FileStream.New(Path.Combine(outputDirectory, $"pull_request_{pullRequestId}_review.md"),FileMode.Create)))
                 {
-                    await stream.WriteAsync(response);
+                    await writer.WriteLineAsync(response);
                 }
             }
         }

@@ -1,71 +1,73 @@
-# Copilot CLI - Docker
-**This is a community-maintained project whose repository is located at [https://github.com/mentordosnerds/github-copilot-cli](https://github.com/mentordosnerds/github-copilot-cli). A copy and modifications were made in this repository for demo purposes.**
+# GitHub Copilot CLI — Docker
 
-This repository contains a `Dockerfile` to build a Docker image with the latest version of Node.js (v22+) and the GitHub Copilot CLI (`@github/copilot`).
+A containerized [GitHub Copilot CLI](https://github.com/github/copilot-cli) image, automatically built and published to Azure Container Registry.
 
-The goal is to allow the use of the Copilot CLI without the need to manage or change the Node.js version on your local machine.
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Node.js 22](https://img.shields.io/badge/Node.js-22-3c873a?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](../../LICENSE)
 
-## Automation with GitHub Actions
+[Overview](#overview) · [How it works](#how-it-works) · [Usage](#usage) · [CI/CD](#cicd)
 
-A GitHub Actions workflow is configured in `.github/workflows/docker-publish.yml` to automate the Docker image build and publication process.
+</div>
 
-The automation is triggered on the following events:
-1.  **Push to the `main` branch**: On every new commit, the image is rebuilt and published with the `latest` and commit `SHA` tags.
-2.  **Daily**: Every day, the workflow runs to ensure the `latest` image contains the most recent version of the `@github/copilot` dependency, in case it has been updated on NPM.
+## Overview
 
-The image is published to the GitHub Container Registry (ghcr.io) and can be found at:
-`ghcr.io/mentordosnerds/github-copilot-cli`
+This project provides a minimal Docker image with the GitHub Copilot CLI pre-installed. It allows you to run the Copilot CLI without managing local Node.js versions or native dependencies — useful both as a standalone tool and as a background container in CI/CD pipelines (e.g., for the [ADO Pull Request Agent](../../README.md)).
 
-## How to Use
+## How it works
 
-To run the Copilot CLI using this Docker image, the command below is designed for a seamless experience. An entrypoint script inside the container will dynamically create a user that matches your local user's UID/GID, solving file permission issues and system compatibility errors.
+The [Dockerfile](Dockerfile) uses a multi-stage build:
 
-It works by:
-- Passing your host UID/GID as environment variables.
-- Mapping your current directory into the container.
-- Mapping your local `.config` and `.gitconfig` to the dynamically created user's home directory inside the container.
-- Mapping your SSH agent socket to allow authentication with services like Git.
+1. **Installer stage** — Uses the official Copilot CLI install script on a `debian:bookworm-slim` base to download the `copilot` binary.
+2. **Final stage** — Starts from a clean `debian:bookworm-slim`, installs Node.js 22 (required for `npx` / MCP servers), copies the `copilot` binary, and sets it as the entrypoint.
 
-### Advanced Command
+The resulting image is lightweight and self-contained.
 
-```bash
-docker run -it --rm --pull=always \
-  -e HOST_UID=$(id -u) \
-  -e HOST_GID=$(id -g) \
-  -v "$(pwd):/work" \
-  -w /work \
-  -v "$HOME:/home/myuser/" \
-  -e SSH_AUTH_SOCK=$SSH_AUTH_SOCK \
-  -v $SSH_AUTH_SOCK:$SSH_AUTH_SOCK \
-  ghcr.io/mentordosnerds/github-copilot-cli:latest [COMMANDS]
-```
-Replace `[COMMANDS]` with the arguments you want to pass to the Copilot CLI (e.g., `auth`, `explain`, etc.).
+## Usage
 
-**Note:** The SSH agent forwarding (`SSH_AUTH_SOCK`) will only work if your SSH agent is running and the environment variable is set.
+### Authentication
 
-### Alias for a Native Experience
+The container requires a GitHub fine-grained Personal Access Token (PAT) with the **Copilot Requests** permission.
 
-For the best experience, create a shell alias. This will make the `copilot` command transparently execute the fully configured Docker container.
+To create one:
+
+1. Go to https://github.com/settings/personal-access-tokens/new
+2. Under "Permissions", click **Add permissions** and select **Copilot Requests**
+3. Generate the token
+
+See the [official Copilot CLI docs](https://github.com/github/copilot-cli/blob/main/README.md#authenticate-with-a-personal-access-token-pat) for details.
+
+### Run as a background daemon
 
 ```bash
-alias copilot='docker run -it --rm --pull=always \
-  -e HOST_UID=$(id -u) \
-  -e HOST_GID=$(id -g) \
-  -v "$(pwd):/work" \
-  -w /work \
-  -v "$HOME:/home/myuser/" \
-  -e SSH_AUTH_SOCK=$SSH_AUTH_SOCK \
-  -v $SSH_AUTH_SOCK:$SSH_AUTH_SOCK \
-  ghcr.io/mentordosnerds/github-copilot-cli:latest'
+docker run -d \
+  -e COPILOT_GITHUB_TOKEN="<your-github-pat>" \
+  -p 4321:4321 \
+  --name copilot-cli \
+  <acr-login-server>/github-copilot/cli:latest \
+  --headless --port 4321
 ```
 
-#### How to make the alias permanent:
+The Copilot CLI will be available at `localhost:4321`. To stop and remove the container:
 
-1.  Open your shell's configuration file (`~/.bashrc`, `~/.zshrc`, or `~/.config/fish/config.fish`).
-2.  Add the alias line to the end of the file.
-3.  Save the file and restart your terminal or run `source ~/.bashrc` (or the corresponding file) to apply the changes.
-
-After setting up the alias, you can use the Copilot CLI as if it were installed locally, with your user permissions, SSH keys, and Git identity intact:
 ```bash
-copilot --help
+docker stop copilot-cli && docker rm copilot-cli
+```
+
+## CI/CD
+
+A [GitHub Actions workflow](../../.github/workflows/docker-buildandpush.yaml) handles building and publishing:
+
+- **Trigger** — Manual dispatch (with an optional daily schedule)
+- **Version detection** — Automatically fetches the latest Copilot CLI release tag from GitHub
+- **Skip logic** — Skips the build if the version already exists in ACR
+- **Tags** — Images are tagged with `latest`, the Copilot CLI version, and the commit SHA
+- **Registry** — Pushed to Azure Container Registry via OIDC authentication
+
+## Project structure
+
+```
+├── Dockerfile          # Multi-stage build for the Copilot CLI image
+├── .dockerignore       # Docker build exclusions
+└── .gitignore          # Git exclusions
 ```
