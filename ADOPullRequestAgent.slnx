@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/GitHubCopilotCLIDocker/">
+    <File Path="src/GitHubCopilotCLIDocker/.github/workflows/docker-buildandpush.yaml" />
+    <File Path="src/GitHubCopilotCLIDocker/Dockerfile" />
+    <File Path="src/GitHubCopilotCLIDocker/entrypoint.sh" />
+    <File Path="src/GitHubCopilotCLIDocker/README.md" />
+  </Folder>
+  <Folder Name="/Resources/">
+    <File Path=".azdo/azure-pipeline.yaml" />
+    <File Path="Dockerfile" />
+  </Folder>
+  <Project Path="src/ADOPullRequestAgent/ADOPullRequestAgent.csproj" />
+</Solution>

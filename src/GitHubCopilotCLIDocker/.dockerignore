@@ -1,0 +1,15 @@
+# Version control
+.git
+.gitignore
+
+# GitHub Actions and metadata
+.github
+
+# Documentation
+README.md
+LICENSE
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml

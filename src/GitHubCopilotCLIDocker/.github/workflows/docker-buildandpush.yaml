@@ -1,0 +1,131 @@
+name: Build and Push Docker Image to ACR
+
+on:
+  # schedule:
+  #   # Run every day at 06:00 UTC
+  #   - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+  ACR_NAME: ${{ vars.ACR_NAME }}
+  IMAGE_NAME: 'github-copilot/cli'
+
+jobs:
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch latest GitHub Copilot CLI release tag
+        id: copilot-version
+        run: |
+          LATEST_TAG=$(curl -sf \
+            https://api.github.com/repos/github/copilot-cli/releases/latest \
+            | jq -r '.tag_name')
+
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            echo "::error::Failed to fetch the latest Copilot CLI release tag"
+            exit 1
+          fi
+
+          # Strip leading 'v' prefix if present (e.g. v0.0.409 -> 0.0.409)
+          VERSION="${LATEST_TAG#v}"
+
+          echo "tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Detected latest Copilot CLI release: ${LATEST_TAG} (version: ${VERSION})"
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to Azure Container Registry
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Check if version already exists in ACR
+        id: version-check
+        run: |
+          VERSION="${{ steps.copilot-version.outputs.version }}"
+          EXISTING_TAGS=$(az acr repository show-tags \
+            --name "$ACR_NAME" \
+            --repository "$IMAGE_NAME" \
+            --output tsv 2>/dev/null || true)
+
+          if echo "$EXISTING_TAGS" | grep -qx "$VERSION"; then
+            echo "Version ${VERSION} already exists in ACR. Skipping build and push."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version ${VERSION} not found in ACR. Proceeding with build and push."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.version-check.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        if: steps.version-check.outputs.exists != 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.copilot-version.outputs.version }}
+            type=sha,prefix=
+
+      - name: Build and push Docker image
+        if: steps.version-check.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: src/GitHubCopilotCLIDocker
+          file: src/GitHubCopilotCLIDocker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CACHE_BUSTER=${{ github.run_id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Cleanup oldest 3 tags in ACR
+        if: steps.version-check.outputs.exists != 'true'
+        run: |
+          echo "Fetching tags ordered by timestamp (oldest first)..."
+          OLDEST_TAGS=$(az acr manifest list-metadata \
+            --registry "$ACR_NAME" \
+            --name "$IMAGE_NAME" \
+            --orderby time_asc \
+            --query "[].tags[]" \
+            --output tsv \
+            | head -n 3)
+
+          if [ -z "$OLDEST_TAGS" ]; then
+            echo "No tags found to clean up."
+            exit 0
+          fi
+
+          echo "Oldest 3 tags to delete:"
+          echo "$OLDEST_TAGS"
+
+          for TAG in $OLDEST_TAGS; do
+            echo "Deleting tag: ${TAG}"
+            az acr repository untag \
+              --name "$ACR_NAME" \
+              --image "${IMAGE_NAME}:${TAG}"
+          done
+
+          echo "Tag cleanup complete."
