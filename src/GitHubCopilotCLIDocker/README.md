@@ -44,6 +44,7 @@ docker run -d \
   -e COPILOT_GITHUB_TOKEN="<your-github-pat>" \
   -p 4321:4321 \
   --name copilot-cli \
+  -v /local/path/to/files:/work/copilot \
   <acr-login-server>/github-copilot/cli:latest \
   --headless --port 4321
 ```
@@ -56,7 +57,14 @@ docker stop copilot-cli && docker rm copilot-cli
 
 ## CI/CD
 
-A [GitHub Actions workflow](../../.github/workflows/docker-buildandpush.yaml) handles building and publishing:
+Two pipeline flavors are available:
+
+| Platform | Path |
+|---|---|
+| GitHub Actions | [`.github/workflows/docker-buildandpush.yaml`](../../.github/workflows/docker-buildandpush.yaml) |
+| Azure DevOps | [`.azdo/copilotcli-buildandpush-pipeline.yaml`](../../.azdo/copilotcli-buildandpush-pipeline.yaml) |
+
+Both pipelines share the same workflow:
 
 - **Trigger** — Manual dispatch (with an optional daily schedule)
 - **Version detection** — Automatically fetches the latest Copilot CLI release tag from GitHub

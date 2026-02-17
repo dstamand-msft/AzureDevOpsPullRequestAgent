@@ -54,6 +54,8 @@ The review output is a Markdown report that can be saved to a file or posted dir
 
 ## Getting started
 
+For a local environment, follow the steps below:
+
 ### 1. Clone the repository
 
 ```bash
@@ -119,7 +121,6 @@ Build and run the agent as a container:
 ```bash
 docker build -t ado-pr-agent .
 docker run --rm \
-  -e COPILOT_GITHUB_TOKEN="<your-github-pat>" \
   ado-pr-agent \
   --ado-token "<ado-token>" \
   --pull-request-id <pr-id> \
