@@ -44,30 +44,43 @@ namespace ADOPullRequestAgent
                     Logger = logger,
                     LogLevel = nameof(LogLevel.Trace),
                     // https://github.com/github/copilot-sdk/blob/main/docs/getting-started.md#connecting-to-an-external-cli-server
-                    // ex: copilot --headless --port 4321
+                    // used with copilot --headless mode
                     CliUrl = $"localhost:{_agentOptions.CliPort}",
                     UseStdio = false
                 };
 
-                var adoMcpNpxCmd = $"npx -y @azure-devops/mcp@latest {organizationName} --domains core repositories search work work-items --authentication envvar";
-
-                var cliRunningOnWindows = false;
-                List<string> cliWindowsArgs = [
-                    "/c",
-                    $"set ADO_MCP_AUTH_TOKEN={_adoMcpAuthenticationToken} && {adoMcpNpxCmd}"
-                ];
-                List<string> cliNixOsXArgs = [
-                    "-c",
-                    $"export ADO_MCP_AUTH_TOKEN={_adoMcpAuthenticationToken} && {adoMcpNpxCmd}"
-                ];
-
-                // NOTE: The CopilotClient requires the environment variable COPILOT_GITHUB_TOKEN to be set with a GitHub token.
-                // This token is used by the client to authenticate with GitHub services.
-                // If the token is not set, the client _will_ not function properly and will throw an authentication error.
-                // The token needs Copilot Requests on the account scope (fine-grained).
                 await using (var client = new CopilotClient(copilotOptions))
                 {
                     await client.StartAsync();
+                    
+                    var mcpServers = new Dictionary<string, object>();
+                    // workaround until https://github.com/github/copilot-sdk/issues/163 is fixed
+                    mcpServers["azure-devops"] = new McpLocalServerConfig
+                    {
+                        Type = "local",
+                        Command = "npx",
+                        // token is set in the env var ADO_MCP_AUTH_TOKEN
+                        // see: https://github.com/microsoft/azure-devops-mcp/blob/main/docs/GETTINGSTARTED.md#using-token-authentication-via-environment-variables
+                        Args = [
+                            "-y",
+                            "@azure-devops/mcp@latest",
+                            organizationName,
+                            "--domains", "core", "repositories", "search", "work", "work-items",
+                            "--authentication", "envvar"
+                        ],
+                        Env = new Dictionary<string, string>
+                        {
+                            ["ADO_MCP_AUTH_TOKEN"] = _adoMcpAuthenticationToken
+                        },
+                        Tools = ["*"]
+                    };
+                    mcpServers["microsoft-learn"] = new McpRemoteServerConfig
+                    {
+                        Type = "http",
+                        Url = "https://learn.microsoft.com/api/mcp",
+                        Tools = ["*"]
+                    };
+
                     var sessionConfig = new SessionConfig
                     {
                         Model = _agentOptions.Model,
@@ -77,29 +90,7 @@ namespace ADOPullRequestAgent
                             Content = systemInstructions,
                             Mode = SystemMessageMode.Append
                         },
-                        McpServers = new Dictionary<string, object>
-                        {
-                            // workaround until https://github.com/github/copilot-sdk/issues/163 is fixed
-                            ["azure-devops"] = new McpLocalServerConfig
-                            {
-                                Type = "local",
-                                Command = cliRunningOnWindows ? "cmd" : "sh",
-                                // token is set in the env var ADO_MCP_AUTH_TOKEN
-                                // see: https://github.com/microsoft/azure-devops-mcp/blob/main/docs/GETTINGSTARTED.md#using-token-authentication-via-environment-variables
-                                Args = cliRunningOnWindows ? cliWindowsArgs : cliNixOsXArgs,
-                                Env = new Dictionary<string, string>
-                                {
-                                    ["ADO_MCP_AUTH_TOKEN"] = _adoMcpAuthenticationToken
-                                },
-                                Tools = ["*"]
-                            },
-                            ["microsoft-learn"] = new McpRemoteServerConfig
-                            {
-                                Type = "http",
-                                Url = "https://learn.microsoft.com/api/mcp",
-                                Tools = ["*"]
-                            }
-                        }
+                        McpServers = mcpServers
                     };
 
                     await using (var session = await client.CreateSessionAsync(sessionConfig))
