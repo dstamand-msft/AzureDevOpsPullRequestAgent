@@ -49,29 +49,32 @@ namespace ADOPullRequestAgent
                     UseStdio = false
                 };
 
+                var adoMcpNpxCmd = $"npx -y @azure-devops/mcp@latest {organizationName} --domains core repositories search work work-items --authentication envvar";
+
+                // The CLI server is running on *nix in the container, but if this code is run on windows, the command needs to be adapted to run in cmd and not sh
+                var cliRunningOnWindows = _agentOptions.CliOsPlatform == PlatformID.Win32NT;
+
+                // token is set in the env var ADO_MCP_AUTH_TOKEN
+                // see: https://github.com/microsoft/azure-devops-mcp/blob/main/docs/GETTINGSTARTED.md#using-token-authentication-via-environment-variables
+                List<string> cliWindowsArgs = [
+                    "/c",
+                    $"set ADO_MCP_AUTH_TOKEN={_adoMcpAuthenticationToken} && {adoMcpNpxCmd}"
+                ];
+                List<string> cliNixOsXArgs = [
+                    "-c",
+                    $"export ADO_MCP_AUTH_TOKEN={_adoMcpAuthenticationToken} && {adoMcpNpxCmd}"
+                ];
+
                 await using (var client = new CopilotClient(copilotOptions))
                 {
                     await client.StartAsync();
                     
                     var mcpServers = new Dictionary<string, object>();
-                    // workaround until https://github.com/github/copilot-sdk/issues/163 is fixed
                     mcpServers["azure-devops"] = new McpLocalServerConfig
                     {
                         Type = "local",
-                        Command = "npx",
-                        // token is set in the env var ADO_MCP_AUTH_TOKEN
-                        // see: https://github.com/microsoft/azure-devops-mcp/blob/main/docs/GETTINGSTARTED.md#using-token-authentication-via-environment-variables
-                        Args = [
-                            "-y",
-                            "@azure-devops/mcp@latest",
-                            organizationName,
-                            "--domains", "core", "repositories", "search", "work", "work-items",
-                            "--authentication", "envvar"
-                        ],
-                        Env = new Dictionary<string, string>
-                        {
-                            ["ADO_MCP_AUTH_TOKEN"] = _adoMcpAuthenticationToken
-                        },
+                        Command = cliRunningOnWindows ? "cmd" : "sh",
+                        Args = cliRunningOnWindows ? cliWindowsArgs : cliNixOsXArgs,
                         Tools = ["*"]
                     };
                     mcpServers["microsoft-learn"] = new McpRemoteServerConfig

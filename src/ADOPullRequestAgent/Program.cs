@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
 using System.Diagnostics;
 using System.IO.Abstractions;
+using System.Reflection;
 
 namespace ADOPullRequestAgent
 {
@@ -62,6 +63,31 @@ namespace ADOPullRequestAgent
             {
                 Description = "The directory to save the agent work steps output to a file (optional)."
             };
+            Option<string> cliOsPlatformOption = new Option<string>("--cli-os-platform")
+            {
+                Description = "The OS platform where the CLI is running. Possible values: windows, unix, osx. Defaults to Unix.",
+                DefaultValueFactory = _ => nameof(PlatformID.Unix),
+                CustomParser = result =>
+                {
+                    var inputValue = result.Tokens[0].Value;
+                    if (string.Equals(inputValue, "windows", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return nameof(PlatformID.Win32NT);
+                    }
+
+                    if (string.Equals(inputValue, nameof(PlatformID.Unix), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return nameof(PlatformID.Unix);
+                    }
+
+                    if (string.Equals(inputValue, "osx", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return nameof(PlatformID.MacOSX);
+                    }
+
+                    throw new ArgumentException($"Invalid OS platform. Valid values are: windows, {nameof(PlatformID.Unix)}, osx");
+                }
+            };
 
             var rootCommand = new RootCommand("A pull request agent for Azure DevOps. It is responsible to provide code reviewing for the pull request and focuses on security, performance, and maintainability.");
             rootCommand.Options.Add(adoTokenOption);
@@ -72,6 +98,7 @@ namespace ADOPullRequestAgent
             rootCommand.Options.Add(outputDirectoryOption);
             rootCommand.Options.Add(cliPortOption);
             rootCommand.Options.Add(modelOption);
+            rootCommand.Options.Add(cliOsPlatformOption);
 
             var parseResult = rootCommand.Parse(args);
             if (parseResult.Errors.Count != 0)
@@ -97,6 +124,7 @@ namespace ADOPullRequestAgent
             var outputDirectory = parseResult.GetValue<string>(outputDirectoryOption);
             var cliPort = parseResult.GetValue<int>(cliPortOption);
             var model = parseResult.GetValue<string>(modelOption);
+            var cliOsPlatform = parseResult.GetValue<string>(cliOsPlatformOption);
 
             var agentOptions = new AgentOptions
             {

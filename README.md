@@ -11,6 +11,10 @@ Automated, AI-powered code reviews for Azure DevOps pull requests — powered by
 
 </div>
 
+## Demo
+
+<video src="media/demo.mp4" controls title="ADO Pull Request Agent Demo"></video>
+
 ## Overview
 
 ADO Pull Request Agent is a .NET console application that performs **automated code reviews** on Azure DevOps pull requests. It connects to the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) and uses the [Azure DevOps MCP server](https://github.com/microsoft/azure-devops-mcp) to fetch PR diffs, then produces a structured security-first review covering:
@@ -26,7 +30,7 @@ The review output is a Markdown report that can be saved to a file or posted dir
 ```
 ┌──────────────┐      ┌─────────────────────┐      ┌──────────────────┐
 │  ADO Pull    │─────▶│  GitHub Copilot SDK ─────▶│  AI Model        │
-│  Request     │      │  (Copilot CLI)      │      │  (Claude Sonnet) │
+│  Request     │      │  (Copilot CLI)      │      │                  │
 │  Agent       │      └─────────────────────┘      └──────────────────┘
 │              │               │
 │              │      ┌────────┴────────┐
@@ -95,7 +99,8 @@ dotnet run --project src/ADOPullRequestAgent -- \
   --organization-name <org> \
   --project-name <project> \
   --repository-name <repo> \
-  --model "claude-sonnet-4.5" \
+  --model <model (i.e. "claude-sonnet-4.5")> \
+  --cli-os-platform <windows|unix|osx> \
   --output-directory .
 ```
 
@@ -112,6 +117,7 @@ The `--output-directory` option writes the review to `pull_request_<id>_review.m
 | `--repository-name` | `-r` | Azure DevOps repository name (required) |
 | `--model` | `-m` | The model to use for the agent (required) |
 | `--cli-port` | `-cp` | The port number for the CLI (defaults to 4321) |
+| `--cli-os-platform` | | The OS platform where the CLI is running: `windows`, `unix`, or `osx` (defaults to `unix`) |
 | `--output-directory` | | The directory to save review output to a Markdown file (optional) |
 
 ### Docker
@@ -127,7 +133,8 @@ docker run --rm \
   --organization-name <org> \
   --project-name <project> \
   --repository-name <repo> \
-  --model "claude-sonnet-4.5"
+  --model <model (i.e. "claude-sonnet-4.5")> \
+  --cli-os-platform unix
 ```
 
 ## Azure DevOps pipeline integration
