@@ -9,11 +9,9 @@ Automated, AI-powered code reviews for Azure DevOps pull requests — powered by
 
 [Overview](#overview) · [How it works](#how-it-works) · [Prerequisites](#prerequisites) · [Getting started](#getting-started) · [Azure DevOps pipeline integration](#azure-devops-pipeline-integration)
 
-</div>
-
 ## Demo
 
-<video src="media/demo.mp4" controls title="ADO Pull Request Agent Demo"></video>
+https://github.com/user-attachments/assets/cc22d11f-778d-48cf-9c46-00af6540b4c7
 
 ## Overview
 
