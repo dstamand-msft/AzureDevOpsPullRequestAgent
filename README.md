@@ -7,7 +7,7 @@ Automated, AI-powered code reviews for Azure DevOps pull requests — powered by
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
-[Overview](#overview) · [How it works](#how-it-works) · [Prerequisites](#prerequisites) · [Getting started](#getting-started) · [Azure DevOps pipeline integration](#azure-devops-pipeline-integration)
+[Overview](#overview) · [How it works](#how-it-works) · [Prerequisites](#prerequisites) · [Getting started](#getting-started) · [Azure DevOps pipeline integration](#azure-devops-pipeline-integration) · [Blog post](https://www.domstamand.com/building-an-ai-pull-request-agent-for-azure-devops-using-github-copilot-sdk/)
 
 ## Demo
 
