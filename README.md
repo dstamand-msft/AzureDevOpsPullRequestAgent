@@ -65,19 +65,19 @@ git clone https://github.com/<your-org>/ADOPullRequestAgent.git
 cd ADOPullRequestAgent
 ```
 
-### 2. Start the Copilot CLI
+### 2. Set environment variables
+
+```bash
+# Required by the GitHub Copilot SDK
+export COPILOT_GITHUB_TOKEN="<your-github-pat>"
+```
+
+### 3. Start the Copilot CLI
 
 In a separate terminal, start the Copilot CLI in headless mode:
 
 ```bash
 copilot --headless --port 4321
-```
-
-### 3. Set environment variables
-
-```bash
-# Required by the GitHub Copilot SDK
-export COPILOT_GITHUB_TOKEN="<your-github-pat>"
 ```
 
 ### 4. Obtain an Azure DevOps token
