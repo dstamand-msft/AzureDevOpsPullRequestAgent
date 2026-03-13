@@ -42,6 +42,7 @@ steps:
       --project-name $(System.TeamProject)
       --repository-name $(Build.Repository.Name)
       --model $(MODEL_NAME)
+      --sources-directory /sources
       --output-directory /output
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
