@@ -1,16 +1,9 @@
-﻿namespace ADOPullRequestAgent;
+namespace ADOPullRequestAgent;
 
 public class AgentOptions
 {
     /// <summary>
-    /// Gets or sets the TCP port number used for CLI (Command-Line Interface) connections.
-    /// </summary>
-    public int CliPort { get; set; }
-
-    public PlatformID CliOsPlatform { get; set; } = PlatformID.Unix;
-
-    /// <summary>
-    /// Gets or sets the name or identifier of the model.
+    /// Gets or sets the name or identifier of the Claude model to use for the review.
     /// </summary>
     public required string Model { get; set; }
 
@@ -19,4 +12,16 @@ public class AgentOptions
     /// The agent uses this path to run git commands and read source files during the review.
     /// </summary>
     public required string SourcesDirectory { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum number of agentic turns Claude Code will execute.
+    /// Used for cost control. When null, Claude Code uses its default.
+    /// </summary>
+    public int? MaxTurns { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum budget in USD for the Claude Code session.
+    /// Used for cost control. When null, no budget limit is applied.
+    /// </summary>
+    public decimal? MaxBudgetUsd { get; set; }
 }

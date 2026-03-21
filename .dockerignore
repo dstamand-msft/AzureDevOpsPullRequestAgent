@@ -5,7 +5,10 @@
 **/obj
 **/node_modules
 **/.azdo
+**/.github
 **/Dockerfile*
 **/.dockerignore
 **/*.md
 **/.gitignore
+**/review
+**/copilot
