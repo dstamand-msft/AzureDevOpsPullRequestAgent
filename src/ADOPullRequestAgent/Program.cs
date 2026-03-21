@@ -1,7 +1,6 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using System.Diagnostics;
 using System.IO.Abstractions;
-using System.Reflection;
 
 namespace ADOPullRequestAgent
 {
@@ -9,13 +8,8 @@ namespace ADOPullRequestAgent
     {
         /// <summary>
         /// Entry point for the Azure DevOps pull request agent application. Parses command-line arguments, initiates a
-        /// code review for the specified pull request, and optionally saves the review output to a file.
+        /// code review for the specified pull request using Claude Code CLI, and optionally saves the review output to a file.
         /// </summary>
-        /// <remarks>
-        /// This method validates command-line input and requires valid values for authentication and pull request
-        /// identification. If parsing fails, error messages are written to the standard error stream and the
-        /// application exits. The review output can be saved to a file if the corresponding option is specified.
-        /// </remarks>
         /// <param name="args">
         /// An array of command-line arguments that configure authentication, pull request details, organization,
         /// project, repository, and output options.
@@ -49,62 +43,40 @@ namespace ADOPullRequestAgent
                 Description = "The name of the Azure DevOps repository.",
                 Required = true
             };
-            Option<int> cliPortOption = new("--cli-port", "-cp")
-            {
-                Description = "The port number for the CLI. Defaults to 4321",
-                DefaultValueFactory = _ => 4321
-            };
             Option<string> modelOption = new("--model", "-m")
             {
-                Description = "The model to use for the agent",
+                Description = "The Claude model to use for the review (e.g., claude-sonnet-4-20250514)",
                 Required = true
             };
             Option<string> outputDirectoryOption = new Option<string>("--output-directory")
             {
-                Description = "The directory to save the agent work steps output to a file (optional)."
+                Description = "The directory to save the review output to a file (optional)."
             };
             Option<string> sourcesDirectoryOption = new Option<string>("--sources-directory", "-sd")
             {
                 Description = "The local directory path where the repository source code is cloned. The agent uses this path to run git commands and read source files during the review.",
                 Required = true
             };
-            Option<string> cliOsPlatformOption = new Option<string>("--cli-os-platform")
+            Option<int?> maxTurnsOption = new("--max-turns")
             {
-                Description = "The OS platform where the CLI is running. Possible values: windows, unix, osx. Defaults to Unix.",
-                DefaultValueFactory = _ => nameof(PlatformID.Unix),
-                CustomParser = result =>
-                {
-                    var inputValue = result.Tokens[0].Value;
-                    if (string.Equals(inputValue, "windows", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return nameof(PlatformID.Win32NT);
-                    }
-
-                    if (string.Equals(inputValue, nameof(PlatformID.Unix), StringComparison.OrdinalIgnoreCase))
-                    {
-                        return nameof(PlatformID.Unix);
-                    }
-
-                    if (string.Equals(inputValue, "osx", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return nameof(PlatformID.MacOSX);
-                    }
-
-                    throw new ArgumentException($"Invalid OS platform. Valid values are: windows, {nameof(PlatformID.Unix)}, osx");
-                }
+                Description = "Maximum number of agentic turns for Claude Code CLI. Used for cost control (optional)."
+            };
+            Option<decimal?> maxBudgetUsdOption = new("--max-budget-usd")
+            {
+                Description = "Maximum budget in USD for the Claude Code session. Used for cost control (optional)."
             };
 
-            var rootCommand = new RootCommand("A pull request agent for Azure DevOps. It is responsible to provide code reviewing for the pull request and focuses on security, performance, and maintainability.");
+            var rootCommand = new RootCommand("A pull request agent for Azure DevOps. Uses Claude Code CLI to perform AI-powered code reviews focusing on security, performance, and maintainability.");
             rootCommand.Options.Add(adoTokenOption);
             rootCommand.Options.Add(pullRequestIdOption);
             rootCommand.Options.Add(organizationNameOption);
             rootCommand.Options.Add(projectNameOption);
             rootCommand.Options.Add(repositoryNameOption);
-            rootCommand.Options.Add(outputDirectoryOption);
-            rootCommand.Options.Add(cliPortOption);
             rootCommand.Options.Add(modelOption);
+            rootCommand.Options.Add(outputDirectoryOption);
             rootCommand.Options.Add(sourcesDirectoryOption);
-            rootCommand.Options.Add(cliOsPlatformOption);
+            rootCommand.Options.Add(maxTurnsOption);
+            rootCommand.Options.Add(maxBudgetUsdOption);
 
             var parseResult = rootCommand.Parse(args);
             if (parseResult.Errors.Count != 0)
@@ -127,18 +99,18 @@ namespace ADOPullRequestAgent
             var organizationName = parseResult.GetRequiredValue<string>(organizationNameOption);
             var projectName = parseResult.GetRequiredValue<string>(projectNameOption);
             var repositoryName = parseResult.GetRequiredValue<string>(repositoryNameOption);
+            var model = parseResult.GetRequiredValue<string>(modelOption);
             var outputDirectory = parseResult.GetValue<string>(outputDirectoryOption);
-            var cliPort = parseResult.GetValue<int>(cliPortOption);
-            var model = parseResult.GetValue<string>(modelOption);
             var sourcesDirectory = parseResult.GetRequiredValue<string>(sourcesDirectoryOption);
-            var cliOsPlatform = parseResult.GetValue<string>(cliOsPlatformOption);
+            var maxTurns = parseResult.GetValue<int?>(maxTurnsOption);
+            var maxBudgetUsd = parseResult.GetValue<decimal?>(maxBudgetUsdOption);
 
             var agentOptions = new AgentOptions
             {
-                Model = model!,
-                CliPort = cliPort,
+                Model = model,
                 SourcesDirectory = sourcesDirectory,
-                CliOsPlatform = Enum.Parse<PlatformID>(cliOsPlatform!)
+                MaxTurns = maxTurns,
+                MaxBudgetUsd = maxBudgetUsd
             };
 
             var fileSystem = new FileSystem();
@@ -156,7 +128,7 @@ namespace ADOPullRequestAgent
 
             if (!string.IsNullOrWhiteSpace(outputDirectory))
             {
-                using (var writer = new StreamWriter(fileSystem.FileStream.New(Path.Combine(outputDirectory, $"pull_request_{pullRequestId}_review.md"),FileMode.Create)))
+                using (var writer = new StreamWriter(fileSystem.FileStream.New(Path.Combine(outputDirectory, $"pull_request_{pullRequestId}_review.md"), FileMode.Create)))
                 {
                     await writer.WriteLineAsync(response);
                 }

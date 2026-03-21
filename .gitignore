@@ -483,3 +483,7 @@ $RECYCLE.BIN/
 
 #Visual Studio Launch Settings
 launchSettings.json
+
+copilot/
+copilot/**
+pull*

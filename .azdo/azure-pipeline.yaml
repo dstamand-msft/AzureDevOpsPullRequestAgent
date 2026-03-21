@@ -7,34 +7,19 @@ pool:
   name: '<value>'
 
 variables:
-- group: 'GitHub-Copilot'
+- group: 'Claude-Code'
 
 steps:
-# Start the GitHub Copilot CLI as a background service container
 - task: Docker@2
-  displayName: 'Start Copilot CLI Service'
+  displayName: 'Run Pull Request Review'
   inputs:
     containerRegistry: $(DOCKER_SERVICECONNECTION_NAME)
-    command: 'run'
-    arguments: >-
-      --name copilot-cli
-      -e COPILOT_GITHUB_TOKEN=$(COPILOT_GITHUB_TOKEN)
-      -d
-      -p 4321:4321
-      -v $(Build.ArtifactStagingDirectory)/copilot:/work/copilot
-      -v $(Build.SourcesDirectory):/sources
-      $(ACR_NAME).azurecr.io/github-copilot/cli:latest
-      --headless --port 4321 --log-level info --log-dir /work/copilot
-
-- task: Docker@2
-  displayName: 'Run Pull Request Container'
-  inputs:
-    containerRegistry: $(DOCKER_SERVICECONNECTION_NAME)
-    repository: 'ado'
     command: 'run'
     arguments: >-
       --name pr-agent-container
-      --network container:copilot-cli
+      -e ANTHROPIC_API_KEY=$(ANTHROPIC_API_KEY)
+      -v $(Build.SourcesDirectory):/sources
+      -v $(Build.ArtifactStagingDirectory)/output:/output
       $(ACR_NAME).azurecr.io/ado/pullrequestagent:latest
       --ado-token $(System.AccessToken)
       --pull-request-id $(System.PullRequest.PullRequestId)
@@ -47,22 +32,18 @@ steps:
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
-- script: |
-    docker cp pr-agent-container:/output/. $(Build.ArtifactStagingDirectory)/output/
-  displayName: 'Copy assistant output from container'
-
 - task: PublishPipelineArtifact@1
   displayName: 'Publish review artifact'
   inputs:
-    targetPath: '$(Build.ArtifactStagingDirectory)'
+    targetPath: '$(Build.ArtifactStagingDirectory)/output'
     artifact: 'PullRequestReview'
 
 - powershell: |
-    $summaryFile = "$(Build.ArtifactStagingDirectory)/copilot/copilot-review-summary.md"
+    $summaryFile = "$(Build.ArtifactStagingDirectory)/output/review/code_review_summary.md"
     if (Test-Path $summaryFile) {
       $reviewFile = $summaryFile
     } else {
-      $reviewFile = "$(Build.ArtifactStagingDirectory)/copilot/copilot-review.md"
+      $reviewFile = "$(Build.ArtifactStagingDirectory)/output/review/code_review.md"
     }
     $content = Get-Content -Path $reviewFile -Raw
     $body = @{
@@ -78,9 +59,3 @@ steps:
   displayName: 'Post review as PR comment'
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-
-- script: |
-    docker stop copilot-cli || true
-    docker rm copilot-cli || true
-  displayName: 'Cleanup Copilot CLI container'
-  condition: always()

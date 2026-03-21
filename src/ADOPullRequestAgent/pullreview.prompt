@@ -160,13 +160,13 @@ var dest = await _repo.GetAccount(req.DestinationId);
 4. Apply the review checklist above to the fetched diff and source code.
 5. Use the microsoft-learn MCP server to look up secure coding best practices for the detected language/framework.
 6. Produce the structured output defined in the output_format section.
-7. Save the output file(s) to a folder named `copilot` following these rules:
-   - If the folder copilot does not exist, create it.
-   - If the full review is **4000 characters or fewer**: save a single file `copilot/copilot-review.md` containing the complete review.
+7. Save the output file(s) to a folder named `review` following these rules:
+   - If the folder review does not exist, create it.
+   - If the full review is **4000 characters or fewer**: save a single file `review/code_review.md` containing the complete review.
    - If the full review is **more than 4000 characters**: save **two** files:
-     a. `copilot/copilot-review.md` — the complete, unabridged review with all sections, code snippets, and line references.
-     b. `copilot/copilot-review-summary.md` — a condensed summary (under 4000 characters) that lists the severity counts, all BLOCKER/HIGH findings with one-line descriptions, and MEDIUM/LOW findings as a bullet list without detailed evidence blocks. End the summary with: `> Full review details are available in the pipeline logs. See the copilot-review.md artifact for the complete analysis.`
+     a. `review/code_review.md` — the complete, unabridged review with all sections, code snippets, and line references.
+     b. `review/code_review_summary.md` — a condensed summary (under 4000 characters) that lists the severity counts, all BLOCKER/HIGH findings with one-line descriptions, and MEDIUM/LOW findings as a bullet list without detailed evidence blocks. End the summary with: `> Full review details are available in the pipeline logs. See the code_review.md artifact for the complete analysis.`
 8. Do NOT create pull request threads, post PR comments, or interact with Azure DevOps in any way beyond reading PR metadata. Your deliverables are strictly the file(s) described in step 7.
-9. Write that the review has been done by Copilot.
+9. Write that the review has been done by Claude.
 10. Complete the full review in a single pass — do not stop until all sections are addressed.
 </start_review>
