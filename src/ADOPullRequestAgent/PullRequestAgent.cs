@@ -221,7 +221,17 @@ namespace ADOPullRequestAgent
             }
             catch (OperationCanceledException)
             {
-                process.Kill(entireProcessTree: true);
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Process may have already exited; ignore to keep timeout handling reliable
+                }
                 throw new TimeoutException($"Claude Code CLI did not complete within {ProcessTimeout.TotalMinutes} minutes. The process was terminated.");
             }
 
