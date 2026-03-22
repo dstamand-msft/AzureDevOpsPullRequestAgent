@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.IO.Abstractions;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -185,29 +184,14 @@ namespace ADOPullRequestAgent
 
             using var process = new Process { StartInfo = startInfo };
 
-            var stdoutBuilder = new StringBuilder();
-            var stderrBuilder = new StringBuilder();
-
-            process.OutputDataReceived += (_, e) =>
-            {
-                if (e.Data != null)
-                {
-                    stdoutBuilder.AppendLine(e.Data);
-                }
-            };
-
-            process.ErrorDataReceived += (_, e) =>
-            {
-                if (e.Data != null)
-                {
-                    logger.LogDebug("[claude stderr] {Line}", e.Data);
-                    stderrBuilder.AppendLine(e.Data);
-                }
-            };
-
             process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+
+            // Start reading stdout and stderr concurrently before writing stdin to prevent
+            // buffer deadlocks. ReadToEndAsync guarantees all output is drained before the
+            // tasks complete, unlike BeginOutputReadLine which can leave data in the buffer
+            // after WaitForExitAsync returns.
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
 
             // Pipe the user prompt to stdin and close it
             await process.StandardInput.WriteLineAsync(userPrompt);
@@ -235,7 +219,16 @@ namespace ADOPullRequestAgent
                 throw new TimeoutException($"Claude Code CLI did not complete within {ProcessTimeout.TotalMinutes} minutes. The process was terminated.");
             }
 
-            return (process.ExitCode, stdoutBuilder.ToString(), stderrBuilder.ToString());
+            // Await stream reads after exit to ensure all buffered output has been captured
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
+
+            foreach (var line in stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                logger.LogDebug("[claude stderr] {Line}", line.TrimEnd('\r'));
+            }
+
+            return (process.ExitCode, stdout, stderr);
         }
 
         /// <summary>
