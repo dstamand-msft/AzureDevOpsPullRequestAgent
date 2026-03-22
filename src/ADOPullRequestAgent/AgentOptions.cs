@@ -16,7 +16,7 @@ public class AgentOptions
     /// <summary>
     /// Gets or sets the output directory path where Claude will save the review files (e.g., /output).
     /// When specified, review files are written to <c>&lt;OutputDirectory&gt;/review/</c>.
-    /// When null, the sources directory is used as the base for the review output folder.
+    /// When null, empty, or whitespace, the sources directory is used as the base for the review output folder.
     /// </summary>
     public string? OutputDirectory { get; set; }
 
