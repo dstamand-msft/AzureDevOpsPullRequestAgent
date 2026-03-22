@@ -100,7 +100,7 @@ namespace ADOPullRequestAgent
                         command = "npx",
                         args = new[]
                         {
-                            "-y", "@azure-devops/mcp@latest", organizationName,
+                            "-y", "@azure-devops/mcp", organizationName,
                             "--domains", "core", "repositories", "search", "work", "work-items",
                             "--authentication", "envvar"
                         },
