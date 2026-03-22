@@ -14,6 +14,13 @@ public class AgentOptions
     public required string SourcesDirectory { get; set; }
 
     /// <summary>
+    /// Gets or sets the output directory path where Claude will save the review files (e.g., /output).
+    /// When specified, review files are written to <c>&lt;OutputDirectory&gt;/review/</c>.
+    /// When null, the sources directory is used as the base for the review output folder.
+    /// </summary>
+    public string? OutputDirectory { get; set; }
+
+    /// <summary>
     /// Gets or sets the maximum number of agentic turns Claude Code will execute.
     /// Used for cost control. When null, Claude Code uses its default.
     /// </summary>

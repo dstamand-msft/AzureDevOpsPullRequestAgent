@@ -109,6 +109,7 @@ namespace ADOPullRequestAgent
             {
                 Model = model,
                 SourcesDirectory = sourcesDirectory,
+                OutputDirectory = outputDirectory,
                 MaxTurns = maxTurns,
                 MaxBudgetUsd = maxBudgetUsd
             };

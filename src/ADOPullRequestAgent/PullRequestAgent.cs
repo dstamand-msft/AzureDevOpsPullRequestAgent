@@ -35,9 +35,13 @@ namespace ADOPullRequestAgent
         /// <returns>The review output as a string.</returns>
         public async Task<string> RunAsync(int pullRequestId, string organizationName, string projectName, string repositoryName)
         {
-            // Load the system prompt and inject the sources directory
+            // Load the system prompt and inject the sources directory and output directory
             var systemInstructions = await _fileSystem.File.ReadAllTextAsync("pullreview.prompt");
             systemInstructions = systemInstructions.Replace("{{SOURCES_DIRECTORY}}", _agentOptions.SourcesDirectory);
+            var outputDir = !string.IsNullOrWhiteSpace(_agentOptions.OutputDirectory)
+                ? _agentOptions.OutputDirectory
+                : _agentOptions.SourcesDirectory;
+            systemInstructions = systemInstructions.Replace("{{OUTPUT_DIRECTORY}}", outputDir);
 
             using var loggerFactory = LoggerFactory.Create(builder =>
             {
